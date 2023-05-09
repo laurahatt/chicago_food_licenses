@@ -1,0 +1,121 @@
+---
+title: "Step 4: Heat map of licenses"
+author: "Laura Hatt"
+date: '2023-05-09'
+output: html_document
+---
+
+*Step 1: Load packages and data*
+
+```{r}
+library(tidyverse)
+library(sf)
+library(tmap)
+library(tmaptools)
+#library(RSocrata)
+#library(tidygeocoder)
+library(terra)
+#library(raster)
+library(spatstat)
+
+path = "/Users/laurahatt/Documents/GitHub/chicago_food_licenses/"
+```
+
+
+Load food license shapefile
+```{r}
+food_licenses_sf <- read_sf(paste0(path, "Shapefiles/food_licenses.shp"))
+```
+
+
+Community Area Boundaries
+```{r}
+#download from: https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Community-Areas-current-/cauq-8yn6
+comm_areas <- read_sf("https://data.cityofchicago.org/api/geospatial/cauq-8yn6?method=export&format=GeoJSON")
+
+#remove unnecessary columns
+comm_areas <- comm_areas %>% dplyr::select("community")
+```
+
+
+City boundary:
+```{r}
+#download from: https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-City/ewy2-6yfk
+city_boundary <- read_sf(paste0(path, "Inputs/city_boundary.shp"))
+```
+
+
+
+
+
+
+```{r}
+# transform crs to distance-based
+food_licenses_sf_3435 <- st_transform(food_licenses_sf, crs = 3435)
+comm_areas_3435 <- st_transform(comm_areas, crs = 3435)
+
+# drop duplicate spatial objects #I think this is a problem, actually
+food_licenses_sf_3435_unique <- st_difference(food_licenses_sf_3435)
+
+# convert to ppp (point pattern) object
+food_pp <- as.ppp(st_geometry(food_licenses_sf_3435_unique))
+
+#convert to density object
+food_dens <- density(food_pp, bw = "nrd0", adjust = 0.2, kernel = "gaussian")
+
+#convert to raster 
+food_rast <- terra::rast(food_dens)
+raster::crs(food_rast) <- "EPSG:3435"
+```
+
+```{r}
+#create new bbox for EPSG:3435
+bbox_new_3435 <- st_bbox(comm_areas_3435) 
+xrange_3435 <- bbox_new_3435$xmax - bbox_new_3435$xmin 
+yrange_3435 <- bbox_new_3435$ymax - bbox_new_3435$ymin 
+bbox_new_3435[1] <- bbox_new_3435[1] + (-0.0 * xrange_3435) # xmin - left
+#bbox_new[3] <- bbox_new[3] + (0.1 * xrange) #xmax - right
+#bbox_new[2] <- bbox_new[2] + (0.1 * yrange) #ymin - bottom
+bbox_new_3435 <- bbox_new_3435 %>% st_as_sfc() 
+
+#set extent #https://rdrr.io/cran/terra/man/ext.html #(xmin, xmax, ymin, ymax)
+#have to do this manually because the west boundary of Chicago extends slightly past
+#the westernmost business license
+bbox_new_3435_list <- c(1091131, 1205199, 1813892, 1951669) #bbox for community areas
+ext(food_rast) <- bbox_new_3435_list
+```
+
+
+
+
+```{r}
+licenses_heatmap <- tm_shape(comm_areas_3435, bbox=bbox_new_3435) + 
+  tm_polygons(col = "gray", 
+              alpha = 1, 
+              border.col = "white") + 
+  tm_shape(city_boundary) + tm_borders(col="grey", lwd=0.5) +
+  tm_shape(food_rast) + 
+  tm_raster(alpha = 0.7,
+            palette=colorRampPalette(c("white", "forestgreen"))(5),
+            style="fisher",
+            n=5,
+            title = "\n\n\n\n\n\nFOOD-RELATED \nBUSINESS \nLICENSES \n\n") + 
+  tm_layout(legend.position=c("left", "center"),
+            legend.title.size = 2,
+            legend.title.fontface = "bold",
+            legend.text.size = 1.25,
+            legend.text.col = "black",
+            frame = FALSE) +
+  tm_credits("Source: Chicago Data Portal", 
+             fontface = "italic", 
+             position = c("left", "bottom"), 
+             size = 1.25) 
+  
+
+tmap_save(licenses_heatmap,
+          paste0(path, "Maps/licenses_heatmap.png"),
+          dpi = 300)
+```
+
+
+
