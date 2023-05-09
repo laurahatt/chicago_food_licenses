@@ -98,6 +98,18 @@ licenses_per_comm_area <- joined_full %>%
 
 
 ```{r}
+#set bounding box
+bbox_new <- st_bbox(comm_areas) 
+xrange <- bbox_new$xmax - bbox_new$xmin 
+yrange <- bbox_new$ymax - bbox_new$ymin 
+bbox_new[1] <- bbox_new[1] + (-0.0 * xrange) # xmin - left
+#bbox_new[3] <- bbox_new[3] + (0.1 * xrange) #xmax - right
+#bbox_new[2] <- bbox_new[2] + (0.1 * yrange) #ymin - bottom
+bbox_new <- bbox_new %>% st_as_sfc() 
+```
+
+
+```{r}
 licenses_by_comm_area <- tm_shape(licenses_per_comm_area, bbox=bbox_new) + 
   tm_polygons("count",
               title = "\n\n\n\n\nCURRENT & ACTIVE \nFOOD-RELATED \nBUSINESS LICENSES",
@@ -116,6 +128,6 @@ licenses_by_comm_area <- tm_shape(licenses_per_comm_area, bbox=bbox_new) +
              size = 1.25) 
 
 tmap_save(licenses_by_comm_area,
-          paste0(path, "fig7a_licenses_by_comm_area.png"),
+          paste0(path, "Maps/licenses_by_comm_area.png"),
           dpi = 300)
 ```
