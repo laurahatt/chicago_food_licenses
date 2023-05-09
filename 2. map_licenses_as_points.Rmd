@@ -1,0 +1,88 @@
+---
+title: "Step 2: Map food licenses as points"
+author: "Laura Hatt"
+date: '2023-05-09'
+output: html_document
+---
+
+
+*Step 1: Load packages and data*
+
+```{r}
+library(tidyverse)
+library(sf)
+library(tmap)
+library(tmaptools)
+#library(RSocrata)
+#library(tidygeocoder)
+#library(terra)
+#library(raster)
+
+path = "/Users/laurahatt/Documents/GitHub/chicago_food_licenses"
+```
+
+Load food license shapefile
+```{r}
+food_licenses_sf <- read_sf(paste0(path, "Shapefiles/food_licenses.shp"))
+```
+
+
+Community Area Boundaries
+```{r}
+#download from: https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Community-Areas-current-/cauq-8yn6
+comm_areas <- read_sf("https://data.cityofchicago.org/api/geospatial/cauq-8yn6?method=export&format=GeoJSON")
+
+#remove unnecessary columns
+comm_areas <- comm_areas %>% dplyr::select("community")
+```
+
+
+City boundary:
+```{r}
+#download from: https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-City/ewy2-6yfk
+city_boundary <- read_sf(paste0(path, "Boundaries - City/geo_export_cfed233e-18b2-4fca-bb9b-28ed65952e25.shp"))
+```
+
+
+
+*Step 4: Map points*
+
+```{r}
+tmap_mode("plot") 
+dev.new(res = 300)
+```
+
+```{r}
+#set bounding box
+bbox_new <- st_bbox(comm_areas) 
+xrange <- bbox_new$xmax - bbox_new$xmin 
+yrange <- bbox_new$ymax - bbox_new$ymin 
+bbox_new[1] <- bbox_new[1] + (-0.0 * xrange) # xmin - left
+#bbox_new[3] <- bbox_new[3] + (0.1 * xrange) #xmax - right
+#bbox_new[2] <- bbox_new[2] + (0.1 * yrange) #ymin - bottom
+bbox_new <- bbox_new %>% st_as_sfc() 
+```
+
+```{r}
+licenses_points <- tm_shape(comm_areas, bbox=bbox_new) + 
+  tm_polygons(col = "gray", alpha = .5, border.col = "white") +
+  tm_shape(food_licenses_sf) + tm_dots(col = "olivedrab",
+                           alpha = 0.25,
+                           size = .25) +
+  tm_add_legend(type = "title",
+                title = "FOOD-RELATED \nBUSINESS \nLICENSES") +
+  tm_layout(legend.position = c("left", "center"),
+            legend.title.size = 2,
+            legend.title.fontface = "bold",
+            legend.text.size = 1.25, 
+            frame = FALSE) +
+  tm_credits("Source: Chicago Data Portal", 
+             fontface = "italic", 
+             position = c("left", "bottom"), 
+             size = 1.25) 
+
+tmap_save(licenses_points,
+          paste0(path, "Maps/licenses_points.png"),
+          dpi = 300)
+```
+
