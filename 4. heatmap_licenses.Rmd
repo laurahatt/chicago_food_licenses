@@ -46,15 +46,16 @@ city_boundary <- read_sf(paste0(path, "Inputs/city_boundary.shp"))
 
 
 
-
+*Step 2: Transform from sf to raster*
 
 
 ```{r}
-# transform crs to distance-based
+# transform to distance-based CRS
 food_licenses_sf_3435 <- st_transform(food_licenses_sf, crs = 3435)
 comm_areas_3435 <- st_transform(comm_areas, crs = 3435)
 
-# drop duplicate spatial objects #I think this is a problem, actually
+# drop duplicate spatial objects 
+#I think this is a problem, actually - revisit
 food_licenses_sf_3435_unique <- st_difference(food_licenses_sf_3435)
 
 # convert to ppp (point pattern) object
@@ -70,22 +71,16 @@ raster::crs(food_rast) <- "EPSG:3435"
 
 ```{r}
 #create new bbox for EPSG:3435
-bbox_new_3435 <- st_bbox(comm_areas_3435) 
-xrange_3435 <- bbox_new_3435$xmax - bbox_new_3435$xmin 
-yrange_3435 <- bbox_new_3435$ymax - bbox_new_3435$ymin 
-bbox_new_3435[1] <- bbox_new_3435[1] + (-0.0 * xrange_3435) # xmin - left
-#bbox_new[3] <- bbox_new[3] + (0.1 * xrange) #xmax - right
-#bbox_new[2] <- bbox_new[2] + (0.1 * yrange) #ymin - bottom
-bbox_new_3435 <- bbox_new_3435 %>% st_as_sfc() 
-
-#set extent #https://rdrr.io/cran/terra/man/ext.html #(xmin, xmax, ymin, ymax)
-#have to do this manually because the west boundary of Chicago extends slightly past
-#the westernmost business license
-bbox_new_3435_list <- c(1091131, 1205199, 1813892, 1951669) #bbox for community areas
-ext(food_rast) <- bbox_new_3435_list
+bbox_new_3435 <- st_bbox(comm_areas_3435) %>% st_as_sfc() 
 ```
 
-
+Set extent of raster
+(have to do this manually because the west boundary of Chicago extends slightly past
+the westernmost business license)
+```{r}
+#https://rdrr.io/cran/terra/man/ext.html #(xmin, xmax, ymin, ymax)
+ext(food_rast) <- c(1091131, 1205199, 1813892, 1951669) #bbox for community areas
+```
 
 
 ```{r}
