@@ -13,13 +13,14 @@ library(tidyverse)
 library(sf)
 library(tmap)
 library(tmaptools)
-#library(RSocrata)
+library(RSocrata)
 #library(tidygeocoder)
 #library(terra)
 #library(raster)
 
-path = "/Users/laurahatt/Documents/GitHub/chicago_food_licenses"
+path = "/Users/laurahatt/Documents/GitHub/chicago_food_licenses/"
 ```
+
 
 Load food license shapefile
 ```{r}
@@ -40,7 +41,7 @@ comm_areas <- comm_areas %>% dplyr::select("community")
 City boundary:
 ```{r}
 #download from: https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-City/ewy2-6yfk
-city_boundary <- read_sf(paste0(path, "Boundaries - City/geo_export_cfed233e-18b2-4fca-bb9b-28ed65952e25.shp"))
+city_boundary <- read_sf(paste0(path, "Inputs/city_boundary.shp"))
 ```
 
 
@@ -66,6 +67,7 @@ bbox_new <- bbox_new %>% st_as_sfc()
 ```{r}
 licenses_points <- tm_shape(comm_areas, bbox=bbox_new) + 
   tm_polygons(col = "gray", alpha = .5, border.col = "white") +
+  tm_shape(city_boundary) + tm_borders(col="grey", lwd=0.5) +
   tm_shape(food_licenses_sf) + tm_dots(col = "olivedrab",
                            alpha = 0.25,
                            size = .25) +

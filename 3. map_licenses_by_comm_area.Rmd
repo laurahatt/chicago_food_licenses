@@ -1,0 +1,121 @@
+---
+title: "Step 3: Count food licenses by community area"
+author: "Laura Hatt"
+date: '2023-05-09'
+output: html_document
+---
+
+*Step 1: Load packages and data*
+
+```{r}
+library(tidyverse)
+library(sf)
+library(tmap)
+library(tmaptools)
+#library(RSocrata)
+#library(tidygeocoder)
+#library(terra)
+#library(raster)
+
+path = "/Users/laurahatt/Documents/GitHub/chicago_food_licenses/"
+```
+
+
+
+Load food license shapefile
+```{r}
+food_licenses_sf <- read_sf(paste0(path, "Shapefiles/food_licenses.shp"))
+```
+
+
+Community Area Boundaries
+```{r}
+#download from: https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Community-Areas-current-/cauq-8yn6
+comm_areas <- read_sf("https://data.cityofchicago.org/api/geospatial/cauq-8yn6?method=export&format=GeoJSON")
+
+#remove unnecessary columns
+comm_areas <- comm_areas %>% dplyr::select("community")
+```
+
+
+City boundary:
+```{r}
+#download from: https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-City/ewy2-6yfk
+city_boundary <- read_sf(paste0(path, "Inputs/city_boundary.shp"))
+```
+
+
+
+*Step 5: Point-in-polygon count*
+
+```{r}
+# spatial join
+joined <- st_join(comm_areas, food_licenses_sf, join = st_intersects, left = TRUE)
+#note that this process drops 189 licenses. 
+```
+
+Adding dropped licenses to community areas
+```{r}
+#view dropped licenses: 
+not_joined <- subset(food_licenses_sf, !(LICENSE_ID %in% joined$LICENSE_ID))
+#these are all at OHare and Navy Pier
+#I think the problem is that these locations are outside a community area
+
+#179 of them have this OHARE location: (42.008536400868735, -87.91442843927047)
+not_joined_ohare <- not_joined[not_joined$LOCATION == "(42.008536400868735, -87.91442843927047)",]
+not_joined_ohare$community <- "OHARE"
+not_joined_ohare
+
+#the rest have 700 E Grand or 900 E Grand - Near North Side
+not_joined[not_joined$LOCATION != "(42.008536400868735, -87.91442843927047)",]
+#(41.892249163400116, -87.60951804879336)
+#(41.89233780863412, -87.6040447589981)
+
+not_joined_700EG <- not_joined[not_joined$LOCATION == "(41.892249163400116, -87.60951804879336)",] 
+not_joined_700EG$community <- "NEAR NORTH SIDE"
+
+not_joined_900EG <- not_joined[not_joined$LOCATION == "(41.89233780863412, -87.6040447589981)",] 
+not_joined_900EG$community <- "NEAR NORTH SIDE"
+
+not_joined_2 <- rbind(not_joined_ohare, not_joined_700EG, not_joined_900EG)
+
+st_geometry(not_joined_2) <- NULL
+
+not_joined_2_joined <- merge(x = comm_areas, 
+                             y = not_joined_2,
+                             by = "community", 
+                             all.y = TRUE)
+
+joined_full <- rbind(joined, not_joined_2_joined)
+```
+
+```{r}
+# point-in-polygon counts
+licenses_per_comm_area <- joined_full %>% 
+  group_by(community) %>%
+  summarize(count = n())
+```
+
+
+```{r}
+licenses_by_comm_area <- tm_shape(licenses_per_comm_area, bbox=bbox_new) + 
+  tm_polygons("count",
+              title = "\n\n\n\n\nCURRENT & ACTIVE \nFOOD-RELATED \nBUSINESS LICENSES",
+              palette="Greens",
+              style = "cont",
+              border.col="white") +
+  tm_shape(city_boundary) + tm_borders(col="grey", lwd=0.5) +
+  tm_layout(legend.position = c("left", "center"),
+            legend.title.size = 1.75,
+            legend.title.fontface = "bold",
+            legend.text.size = 1.25, 
+            frame = FALSE) +
+  tm_credits("Data Source: \nChicago Data Portal \nAccessed May 5, 2023", 
+             fontface = "italic", 
+             position = c("left", "bottom"), 
+             size = 1.25) 
+
+tmap_save(licenses_by_comm_area,
+          paste0(path, "fig7a_licenses_by_comm_area.png"),
+          dpi = 300)
+```
