@@ -1,0 +1,125 @@
+---
+title: "step 5"
+author: "Laura Hatt"
+date: '2023-05-09'
+output: html_document
+---
+
+
+*Step 1: Load packages and data*
+
+```{r}
+library(tidyverse)
+library(sf)
+library(tmap)
+library(tmaptools)
+#library(RSocrata)
+#library(tidygeocoder)
+library(terra)
+#library(raster)
+library(spatstat)
+
+path = "/Users/laurahatt/Documents/GitHub/chicago_food_licenses/"
+```
+
+
+
+
+
+Business Licenses
+```{r}
+#Download from: https://data.cityofchicago.org/Community-Economic-Development/Business-Licenses/r5kz-chrr
+licenses_all <- read_csv(paste0(path, "Business_Licenses_All.csv"))
+
+#remove spaces from column names
+names(licenses_all) <- make.names(names(licenses_all),unique = TRUE)
+
+#filter to include only business licenses in Chicago
+licenses_all <- filter(licenses_all, CITY == "CHICAGO")
+
+#filter to food-related licenses
+licenses_all <- filter(licenses_all, LICENSE.DESCRIPTION %in% food_related_license_types)
+```
+
+
+```{r}
+licenses_all %>% count(LICENSE.STATUS)
+length(unique(licenses_all$ACCOUNT.NUMBER))
+length(food_licenses$ACCOUNT.NUMBER)
+str(licenses_all$LICENSE.TERM.EXPIRATION.DATE)
+```
+
+
+
+```{r}
+#change date columns from string to date class
+licenses_all$LICENSE.TERM.START.DATE <- as.Date(licenses_all$LICENSE.TERM.START.DATE, format="%m/%d/%Y")
+licenses_all$LICENSE.TERM.EXPIRATION.DATE <- as.Date(licenses_all$LICENSE.TERM.EXPIRATION.DATE, format="%m/%d/%Y")
+licenses_all$LICENSE.STATUS.CHANGE.DATE <- as.Date(licenses_all$LICENSE.STATUS.CHANGE.DATE, format="%m/%d/%Y")
+
+#filter for licenses active during 2022 - issued on or before 2022-12-31 and expiration date on or after 2022-01-1 
+licenses_all_2022 <- licenses_all %>%
+  filter(LICENSE.TERM.START.DATE <= "2022-12-31") %>%
+  filter(LICENSE.TERM.EXPIRATION.DATE >= "2022-01-01")
+
+licenses_all_2022 <- licenses_all_2022 %>% drop_na(LATITUDE) #this drops over 100 entries, might be a problem
+```
+
+```{r}
+#filter to cancelled or revoked licenses
+licenses_all_2022_canc <- licenses_all_2022 %>% filter(LICENSE.STATUS == "AAC" | LICENSE.STATUS == "REV")
+
+#filter to active licenses
+licenses_all_2022_active <- licenses_all_2022 %>% filter(LICENSE.STATUS == "AAI") #skip licenses being appealed - REA
+```
+
+```{r}
+licenses_all_2022_canc_sf <- st_as_sf(licenses_all_2022_canc, coords = c("LONGITUDE","LATITUDE"), crs = 4326) 
+licenses_all_2022_active_sf <- st_as_sf(licenses_all_2022_active, coords = c("LONGITUDE","LATITUDE"), crs = 4326) 
+```
+
+
+```{r}
+#from 872 to 866
+licenses_2022_canc_joined <- st_join(comm_areas, 
+                                     licenses_all_2022_canc_sf, 
+                                     join = st_intersects, 
+                                     left = TRUE)
+#from 22,276 to 21,945
+licenses_2022_active_joined <- st_join(comm_areas, 
+                                     licenses_all_2022_active_sf, 
+                                     join = st_intersects, 
+                                     left = TRUE)
+```
+
+```{r}
+# point-in-polygon counts
+canc_per_comm_area <- licenses_2022_canc_joined %>% 
+  group_by(community) %>%
+  summarize(cancelled_licenses = n())
+
+active_per_comm_area <- licenses_2022_active_joined %>% 
+  group_by(community) %>%
+  summarize(active_licenses = n())
+
+st_geometry(canc_per_comm_area) <- NULL
+
+share_canc_per_comm_area <- merge(x = active_per_comm_area, 
+                             y = canc_per_comm_area,
+                             by = "community", 
+                             all.x = TRUE)
+
+share_canc_per_comm_area$share_canc <- share_canc_per_comm_area$cancelled_licenses / (share_canc_per_comm_area$cancelled_licenses + share_canc_per_comm_area$active_licenses)
+
+share_canc_per_comm_area
+```
+
+
+
+```{r}
+tm_shape(share_canc_per_comm_area) + tm_polygons("share_canc")
+```
+
+
+
+
