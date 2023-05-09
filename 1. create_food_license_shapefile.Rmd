@@ -1,0 +1,135 @@
+---
+title: "Step 1: Create food license shapefile"
+author: "Laura Hatt"
+date: '2023-05-03'
+output: html_document
+---
+
+Inspired by: https://voorheescenter.uic.edu/news-stories/what-was-covids-impact-on-chicagos-food-industry/ 
+
+*Step 1: Load packages and data*
+
+```{r}
+library(tidyverse)
+library(sf)
+library(tmap)
+library(tmaptools)
+library(RSocrata)
+library(tidygeocoder)
+library(terra)
+#library(raster)
+
+path = "/Users/laurahatt/Desktop/Mayors_Office/FEC/"
+```
+
+Community Area Boundaries
+```{r}
+#download from: https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Community-Areas-current-/cauq-8yn6
+comm_areas <- read_sf("https://data.cityofchicago.org/api/geospatial/cauq-8yn6?method=export&format=GeoJSON")
+
+#remove unnecessary columns
+comm_areas <- comm_areas %>% dplyr::select("community")
+```
+
+City boundary:
+```{r}
+#download from: https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-City/ewy2-6yfk
+city_boundary <- read_sf(paste0(path, "Boundaries - City/geo_export_cfed233e-18b2-4fca-bb9b-28ed65952e25.shp"))
+```
+
+
+Business Licenses - Current Active
+```{r}
+#download from: https://data.cityofchicago.org/Community-Economic-Development/Business-Licenses-Current-Active/uupf-x98q
+licenses <- read_csv(paste0(path, "business_licenses.csv"))
+
+#remove spaces from column names
+names(licenses) <- make.names(names(licenses),unique = TRUE)
+```
+
+*Step 2: Filter to include only Chicago food-related business licenses*
+
+```{r}
+#filter to include only business licenses in Chicago
+licenses <- filter(licenses, CITY == "CHICAGO")
+```
+
+
+
+The next part involves some discretion.
+
+Per the Voorhees report:
+The food business classifications are as follows:
+• Catering
+• Shared Kitchens
+• Packaged Goods
+• Food Peddlers
+• Retail Food
+• Special Event Food & Liquor
+• Tavern
+• Wholesale Food Establishment
+
+However, when I review the unique strings in the "License Description" column, I see the following food-related categories:
+
+```{r}
+food_related_license_types <- c("Retail Food Establishment", 
+                                "Mobile Food License", 
+                                "Wholesale Food Establishment", 
+                                "Special Event Food",
+                                "Shared Kitchen User (Long Term)",
+                                "Shared Kitchen User (Short Term)",
+                                "Food - Shared Kitchen",
+                                "Food - Shared Kitchen - Supplemental",
+                                "Pop-Up Establishment Host - Tier II",
+                                "Pop-Up Establishment Host - Tier III",
+                                "Pop-Up Food Est. User - Tier I",
+                                "Pop-Up Food Est. User - Tier II",
+                                "Pop-Up Food Est. User - Tier III",
+                                "Outdoor Patio",
+                                "Package Goods",
+                                "Tavern",
+                                "Caterer's Liquor License" )
+
+food_licenses <- filter(licenses, LICENSE.DESCRIPTION %in% food_related_license_types)
+```
+
+*Step 3: Use coordinates to create sf object*
+
+Geocode licenses that are missing coordinates:
+```{r}
+#collect rows with missing coordinates
+missing_coords <- food_licenses[is.na(food_licenses$LOCATION),]
+
+#geocode addresses for rows with missing coordinates
+missing_coords_geocoded <- missing_coords %>%
+  geocode_combine(queries = list(list(method = "census", mode = "batch"), 
+                                 list(method = "census", mode = "single"),
+                                 list(method = "osm")),
+                  global_params = list(street = "ADDRESS", 
+                                       city = "CITY",
+                                       state = "STATE", 
+                                       postalcode = "ZIP.CODE"),
+                  query_names = c("census_batch", "census_single", "osm"))
+
+#remove rows with "problem addresses" that the geocoder couldn't manage
+missing_coords_geocoded <- missing_coords_geocoded %>% drop_na(lat)
+
+#move geocoder lat and long into original columns and delete new columns
+missing_coords_geocoded$LATITUDE <- missing_coords_geocoded$lat
+missing_coords_geocoded$LONGITUDE <- missing_coords_geocoded$long
+missing_coords_geocoded <- subset(missing_coords_geocoded, select = -c(lat, long, query))
+```
+
+Add geocoded coordinates to the dataframe:
+```{r}
+#remove rows with missing coordinates from main dataset
+food_licenses <- food_licenses %>% drop_na(LOCATION)
+
+#add rows with geocoded coordinates
+food_licenses_coords <- rbind(food_licenses, missing_coords_geocoded)
+```
+
+Create SF object:
+```{r}
+food_licenses_sf <- st_as_sf(food_licenses_coords, coords = c("LONGITUDE","LATITUDE"), crs = 4326) 
+```
