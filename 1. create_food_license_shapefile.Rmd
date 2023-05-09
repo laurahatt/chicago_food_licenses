@@ -12,14 +12,14 @@ Inspired by: https://voorheescenter.uic.edu/news-stories/what-was-covids-impact-
 ```{r}
 library(tidyverse)
 library(sf)
-library(tmap)
-library(tmaptools)
+#library(tmap)
+#library(tmaptools)
 library(RSocrata)
 library(tidygeocoder)
-library(terra)
+#library(terra)
 #library(raster)
 
-path = "/Users/laurahatt/Desktop/Mayors_Office/FEC/"
+path = "/Users/laurahatt/Documents/GitHub/chicago_food_licenses/"
 ```
 
 Community Area Boundaries
@@ -29,12 +29,6 @@ comm_areas <- read_sf("https://data.cityofchicago.org/api/geospatial/cauq-8yn6?m
 
 #remove unnecessary columns
 comm_areas <- comm_areas %>% dplyr::select("community")
-```
-
-City boundary:
-```{r}
-#download from: https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-City/ewy2-6yfk
-city_boundary <- read_sf(paste0(path, "Boundaries - City/geo_export_cfed233e-18b2-4fca-bb9b-28ed65952e25.shp"))
 ```
 
 
@@ -112,6 +106,7 @@ missing_coords_geocoded <- missing_coords %>%
                   query_names = c("census_batch", "census_single", "osm"))
 
 #remove rows with "problem addresses" that the geocoder couldn't manage
+#inspect later for trends
 missing_coords_geocoded <- missing_coords_geocoded %>% drop_na(lat)
 
 #move geocoder lat and long into original columns and delete new columns
@@ -133,3 +128,14 @@ Create SF object:
 ```{r}
 food_licenses_sf <- st_as_sf(food_licenses_coords, coords = c("LONGITUDE","LATITUDE"), crs = 4326) 
 ```
+
+Eliminate unnecessary columns, for simplicity (for now)
+```{r}
+food_licenses_sf <- food_licenses_sf %>% select(LICENSE.ID, LEGAL.NAME, ADDRESS)
+```
+
+Save as shapefile
+```{r}
+write_sf(obj=food_licenses_sf, dsn=paste0(path, "Shapefiles/food_licenses.shp"))
+```
+
