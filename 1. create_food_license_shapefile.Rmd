@@ -33,7 +33,7 @@ comm_areas <- comm_areas %>% dplyr::select("community")
 
 
 Business Licenses - Current Active
-```{r}
+```{r, message=FALSE}
 #download from: https://data.cityofchicago.org/Community-Economic-Development/Business-Licenses-Current-Active/uupf-x98q
 licenses <- read_csv(paste0(path, "business_licenses.csv"))
 
@@ -131,7 +131,10 @@ food_licenses_sf <- st_as_sf(food_licenses_coords, coords = c("LONGITUDE","LATIT
 
 Eliminate unnecessary columns, for simplicity (for now)
 ```{r}
-food_licenses_sf <- food_licenses_sf %>% select(LICENSE.ID, LEGAL.NAME, ADDRESS)
+food_licenses_sf <- food_licenses_sf %>% select(LICENSE.ID, 
+                                                LEGAL.NAME, 
+                                                ADDRESS,
+                                                LOCATION)
 ```
 
 Save as shapefile
