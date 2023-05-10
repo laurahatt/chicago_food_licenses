@@ -67,6 +67,16 @@ food_dens <- density(food_pp, bw = "nrd0", adjust = 0.2, kernel = "gaussian")
 #convert to raster 
 food_rast <- terra::rast(food_dens)
 raster::crs(food_rast) <- "EPSG:3435"
+
+#attempts to increase raster resolution
+
+#attempt 1
+res(terra::disagg(food_rast, fact=5)) #this decreases resolution, somehow
+
+#attempt 2
+res(food_rast)*10 #nrow = 8348.598 ncol = 10695.388
+food_rast_10 <- terra::rast(food_dens, nrows=8348.598, ncols=10695.388)
+raster::crs(food_rast_10) <- "EPSG:3435"
 ```
 
 ```{r}
@@ -80,6 +90,7 @@ the westernmost business license)
 ```{r}
 #https://rdrr.io/cran/terra/man/ext.html #(xmin, xmax, ymin, ymax)
 ext(food_rast) <- c(1091131, 1205199, 1813892, 1951669) #bbox for community areas
+ext(food_rast_10) <- c(1091131, 1205199, 1813892, 1951669)
 ```
 
 
